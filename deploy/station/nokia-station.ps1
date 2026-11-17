@@ -19,7 +19,7 @@ $routers = $Router -split "," | ForEach-Object { $_.Trim() } | Where-Object { $_
 if ($routers.Count -gt 4) { Write-Error "max 4 routers per station"; exit 1 }
 
 # OpenSSH ignores keys readable by other users - lock the ACL to this account.
-icacls $Key /inheritance:r /grant:r "$env:USERNAME:F" | Out-Null
+icacls $Key /inheritance:r /grant:r "$($env:USERNAME):F" | Out-Null
 
 Write-Host "nokia-station: $($routers.Count) router(s) on relay ports $Port..$($Port + $routers.Count - 1)"
 
