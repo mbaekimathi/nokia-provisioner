@@ -11,6 +11,7 @@ services:
       DATABASE_PATH: /data/db.sqlite3
     volumes:
       - db_data:/data
+      - ./deploy/relay/stations.tsv:/app/deploy/relay/stations.tsv:ro
     expose:
       - "8000"
     healthcheck:

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { Fragment, useEffect, useRef, useState } from 'react'
 
 const api = {
   async signup(data) {
@@ -228,16 +228,33 @@ function RouterCard({ r, onRefresh }) {
           </>
         )}
         {r.status !== 'failed' && !busy && <button className="btn-sm" onClick={async () => { await api.retry(r.id); onRefresh() }}>Retry</button>}
-        <button className="btn-danger" onClick={async () => { await api.remove(r.id); onRefresh() }}>Delete</button>
+        {r.status !== 'success' && <button className="btn-danger" onClick={async () => { await api.remove(r.id); onRefresh() }}>Delete</button>}
       </div>
       {open && <pre className="logbox">{log || 'no log yet'}</pre>}
     </div>
   )
 }
 
+const PERIODS = [
+  ['day', 'Today'], ['week', 'Last 7 days'], ['month', 'Last 30 days'],
+  ['year', 'Last 365 days'], ['all', 'All time'],
+]
+
+function periodCutoff(period) {
+  const now = new Date()
+  if (period === 'day') { const d = new Date(now); d.setHours(0, 0, 0, 0); return d }
+  const days = { week: 7, month: 30, year: 365 }[period]
+  return days ? new Date(now.getTime() - days * 86400000) : null
+}
+
+function inPeriod(r, period) {
+  const c = periodCutoff(period)
+  return !c || new Date(r.created_at) >= c
+}
+
 function ProvisioningPage() {
   const [routers, setRouters] = useState([])
-  const [stats, setStats] = useState({ total: 0, success: 0, failed: 0, running: 0, pending: 0 })
+  const [period, setPeriod] = useState('all')
   const [ssid, setSsid] = useState('')
   const [ssid5, setSsid5] = useState('')
   const [wifiPass, setWifiPass] = useState('')
@@ -253,9 +270,8 @@ function ProvisioningPage() {
 
   const refresh = async () => {
     try {
-      const [l, s] = await Promise.all([api.list(), api.stats()])
+      const l = await api.list()
       setRouters(l.routers || [])
-      setStats(s)
     } catch { /* backend not up yet */ }
   }
 
@@ -360,6 +376,15 @@ function ProvisioningPage() {
     refresh()
   }
 
+  const filtered = routers.filter(r => inPeriod(r, period))
+  const stats = {
+    total: filtered.length,
+    success: filtered.filter(r => r.status === 'success').length,
+    failed: filtered.filter(r => r.status === 'failed').length,
+    running: filtered.filter(r => r.status === 'running').length,
+    pending: filtered.filter(r => r.status === 'pending').length,
+  }
+
   return (
     <div className="app">
       <div className="stats">
@@ -458,10 +483,10 @@ function ProvisioningPage() {
             </div>
           </div>
           <div className="field" style={{ marginTop: 12 }}>
-            <label>Router IPs — one per line: IP or IP,label password (blank = find one router automatically)</label>
+            <label>Router IPs — one per line: IP/relay:port, optionally followed by ,password (blank = find one router automatically)</label>
             <textarea
               style={{ width: '100%', minHeight: 70, padding: 10, borderRadius: 10, background: '#0f172a', border: '1px solid #334155', color: '#e2e8f0', fontSize: '0.9rem' }}
-              placeholder={'192.168.0.10, LGt2t437Uv\n192.168.0.11\n192.168.0.12, Kx91mPq2Za'}
+              placeholder={'192.168.0.10, LGt2t437Uv\n192.168.0.11\nrelay:18443\nrelay:18453, Kx91mPq2Za'}
               value={b.targets}
               onChange={bfield(b.id, 'targets')}
             />
@@ -486,9 +511,23 @@ function ProvisioningPage() {
       ))}
 
       <div className="card" style={{ padding: '14px 16px' }}>
-        <h2>Routers</h2>
-        {routers.length === 0 && <div className="empty">Nothing provisioned yet — plug a router in and enter an SSID above.</div>}
-        {routers.map(r => <RouterCard key={r.id} r={r} onRefresh={refresh} />)}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+          <h2 style={{ margin: 0 }}>Routers</h2>
+          <div className="field" style={{ margin: 0, minWidth: 170 }}>
+            <label>Period</label>
+            <select value={period} onChange={e => setPeriod(e.target.value)}>
+              {PERIODS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+            </select>
+          </div>
+        </div>
+        {filtered.length === 0 && (
+          <div className="empty">
+            {routers.length === 0
+              ? 'Nothing provisioned yet — plug a router in and enter an SSID above.'
+              : 'No setups in this period.'}
+          </div>
+        )}
+        {filtered.map(r => <RouterCard key={r.id} r={r} onRefresh={refresh} />)}
       </div>
     </div>
   )
@@ -503,6 +542,9 @@ const STATUS_LABEL = {
 function HRPage({ me }) {
   const [emps, setEmps] = useState([])
   const [msg, setMsg] = useState('')
+  const [approveRole, setApproveRole] = useState({})
+  const [editId, setEditId] = useState(null)
+  const [editForm, setEditForm] = useState({})
   const isAdmin = me.role === 'admin'
 
   const refresh = () => api.employees()
@@ -513,8 +555,25 @@ function HRPage({ me }) {
 
   const update = async (id, patch) => {
     const res = await api.updateEmployee(id, patch)
-    if (res.error) setMsg(res.error)
-    refresh()
+    setMsg(res.error || '')
+    if (!res.error) { setEditId(null); refresh() }
+  }
+
+  const startEdit = (e) => {
+    setEditId(e.id)
+    setEditForm({
+      first_name: e.first_name, last_name: e.last_name, email: e.email,
+      code: e.code, role: e.role, status: e.status, password: '',
+    })
+    setMsg('')
+  }
+
+  const ef = (k) => (ev) => setEditForm(f => ({ ...f, [k]: ev.target.value }))
+
+  const saveEdit = (id) => {
+    const patch = { ...editForm }
+    if (!patch.password) delete patch.password
+    update(id, patch)
   }
 
   return (
@@ -533,32 +592,89 @@ function HRPage({ me }) {
             </thead>
             <tbody>
               {emps.map(e => (
-                <tr key={e.id}>
-                  <td>{e.first_name} {e.last_name}</td>
-                  <td className="meta">{e.email}</td>
-                  <td style={{ fontFamily: 'ui-monospace, monospace' }}>{e.code}</td>
-                  <td>
-                    {isAdmin && e.id !== me.id ? (
-                      <select value={e.role} onChange={ev => update(e.id, { role: ev.target.value })}>
-                        <option value="admin">admin</option>
-                        <option value="cashier">cashier</option>
-                        <option value="employee">employee</option>
-                      </select>
-                    ) : <span className={`badge role-${e.role}`} style={{ marginLeft: 0 }}>{e.role}</span>}
-                  </td>
-                  <td><span className={`badge st-${e.status}`} style={{ marginLeft: 0 }}>{STATUS_LABEL[e.status] || e.status}</span></td>
-                  {isAdmin && (
-                    <td>
-                      {e.id !== me.id && e.status !== 'active' && (
-                        <button className="btn-sm" style={{ marginRight: 6 }} onClick={() => update(e.id, { status: 'active' })}>Activate</button>
-                      )}
-                      {e.id !== me.id && e.status === 'active' && (
-                        <button className="btn-danger" onClick={() => update(e.id, { status: 'suspended' })}>Suspend</button>
-                      )}
-                      {e.id === me.id && <span className="meta">you</span>}
-                    </td>
+                <Fragment key={e.id}>
+                  <tr>
+                    <td>{e.first_name} {e.last_name}</td>
+                    <td className="meta">{e.email}</td>
+                    <td style={{ fontFamily: 'ui-monospace, monospace' }}>{e.code}</td>
+                    <td><span className={`badge role-${e.role}`} style={{ marginLeft: 0 }}>{e.role}</span></td>
+                    <td><span className={`badge st-${e.status}`} style={{ marginLeft: 0 }}>{STATUS_LABEL[e.status] || e.status}</span></td>
+                    {isAdmin && (
+                      <td className="row-actions">
+                        {e.status === 'pending_activation' && e.id !== me.id && (
+                          <>
+                            <select
+                              value={approveRole[e.id] || e.role}
+                              onChange={ev => setApproveRole(m => ({ ...m, [e.id]: ev.target.value }))}
+                            >
+                              <option value="employee">employee</option>
+                              <option value="cashier">cashier</option>
+                              <option value="admin">admin</option>
+                            </select>
+                            <button className="btn-sm" onClick={() => update(e.id, { status: 'active', role: approveRole[e.id] || e.role })}>Approve</button>
+                          </>
+                        )}
+                        {e.status === 'active' && e.id !== me.id && (
+                          <button className="btn-danger" onClick={() => update(e.id, { status: 'suspended' })}>Suspend</button>
+                        )}
+                        {e.status === 'suspended' && e.id !== me.id && (
+                          <button className="btn-sm" onClick={() => update(e.id, { status: 'active' })}>Activate</button>
+                        )}
+                        <button className="btn-sm" onClick={() => editId === e.id ? setEditId(null) : startEdit(e)}>
+                          {editId === e.id ? 'Close' : 'Edit'}
+                        </button>
+                      </td>
+                    )}
+                  </tr>
+                  {editId === e.id && (
+                    <tr className="edit-row">
+                      <td colSpan={isAdmin ? 6 : 5}>
+                        <div className="form-grid">
+                          <div className="field">
+                            <label>First name</label>
+                            <input value={editForm.first_name} onChange={ef('first_name')} />
+                          </div>
+                          <div className="field">
+                            <label>Last name</label>
+                            <input value={editForm.last_name} onChange={ef('last_name')} />
+                          </div>
+                          <div className="field">
+                            <label>Email</label>
+                            <input type="email" value={editForm.email} onChange={ef('email')} />
+                          </div>
+                          <div className="field">
+                            <label>6-digit code</label>
+                            <input value={editForm.code} onChange={ef('code')} inputMode="numeric" maxLength={6} />
+                          </div>
+                          <div className="field">
+                            <label>Role</label>
+                            <select value={editForm.role} onChange={ef('role')}>
+                              <option value="employee">employee</option>
+                              <option value="cashier">cashier</option>
+                              <option value="admin">admin</option>
+                            </select>
+                          </div>
+                          <div className="field">
+                            <label>Status</label>
+                            <select value={editForm.status} onChange={ef('status')}>
+                              <option value="pending_activation">pending activation</option>
+                              <option value="active">active</option>
+                              <option value="suspended">suspended</option>
+                            </select>
+                          </div>
+                          <div className="field">
+                            <label>New password — blank keeps current</label>
+                            <PasswordInput value={editForm.password} onChange={ef('password')} />
+                          </div>
+                        </div>
+                        <div className="actions">
+                          <button className="btn-primary" type="button" onClick={() => saveEdit(e.id)}>Save changes</button>
+                          <button className="btn-ghost" type="button" onClick={() => setEditId(null)}>Cancel</button>
+                        </div>
+                      </td>
+                    </tr>
                   )}
-                </tr>
+                </Fragment>
               ))}
             </tbody>
           </table>

@@ -172,6 +172,9 @@ button {
   background: #0f172a; border: 1px solid #334155; color: #e2e8f0;
   border-radius: 8px; padding: 6px 8px; font-size: 0.82rem; outline: none;
 }
+.row-actions { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.edit-row td { background: #0f172a; padding: 16px; }
+.edit-row .field input, .edit-row .field select { font-size: 0.85rem; }
 
 @media (max-width: 760px) {
   .shell { flex-direction: column; }

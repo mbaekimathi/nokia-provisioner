@@ -5,7 +5,7 @@ from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 
-from .discovery import CANDIDATE_IPS, local_subnets, probe
+from .discovery import CANDIDATE_IPS, local_subnets, probe, relay_endpoints
 from .models import Employee, Router, Setting
 from .worker import start_provision
 
@@ -181,6 +181,8 @@ def router_detail(request, pk):
     if request.method == "GET":
         return JsonResponse(r.to_dict(with_log=True))
     if request.method == "DELETE":
+        if r.status == "success":
+            return JsonResponse({"error": "successful setups cannot be deleted"}, status=403)
         r.delete()
         return JsonResponse({"deleted": pk})
     # POST = retry/provision (optionally with a corrected label password)
@@ -259,25 +261,24 @@ def subnets(request):
 @csrf_exempt
 @require_http_methods(["POST"])
 def scan(request):
-    """Sweep a /24 — or every local subnet plus well-known IPs when the subnet
-    is blank/"auto" — for devices answering the Nokia login CGI."""
+    """Sweep a /24 — or every local subnet, well-known IP, and relay endpoint
+    when the subnet is blank/"auto" — for devices answering the Nokia login CGI."""
     data = _body(request)
     subnet = (data.get("subnet") or "").strip()
-    if subnet and subnet.lower() != "auto":
+    explicit = bool(subnet and subnet.lower() != "auto")
+    if explicit:
         if subnet.count(".") != 2 or not all(
                 p.isdigit() and int(p) < 256 for p in subnet.split(".")):
             return JsonResponse({"error": "subnet must be like 192.168.0"}, status=400)
         subnets = [subnet]
     else:
         subnets = local_subnets()
-        if not subnets:
-            return JsonResponse(
-                {"error": "no local networks detected — enter a subnet like 192.168.0"},
-                status=400)
 
     import concurrent.futures
 
     targets = set(CANDIDATE_IPS)
+    if not explicit:
+        targets |= relay_endpoints()
     for s in subnets:
         targets.update(f"{s}.{i}" for i in range(1, 255))
 
@@ -286,5 +287,11 @@ def scan(request):
         for hit in ex.map(lambda ip: probe(ip, 1.5), targets):
             if hit:
                 found.add(hit)
-    found = sorted(found, key=lambda ip: tuple(int(p) for p in ip.split(".")))
+
+    def sort_key(ip):
+        if ip.startswith("relay:"):
+            return (1, int(ip.split(":", 1)[1]))
+        return (0, tuple(int(p) for p in ip.split(".")))
+
+    found = sorted(found, key=sort_key)
     return JsonResponse({"found": found})

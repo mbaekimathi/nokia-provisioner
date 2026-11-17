@@ -1,7 +1,9 @@
 """Auto-discovery: find Nokia gateways on the local network + try stored credentials."""
 import concurrent.futures
+import os
 import re
 import subprocess
+from pathlib import Path
 
 import requests
 import urllib3
@@ -16,6 +18,41 @@ CANDIDATE_IPS = [
     "192.168.100.1",
     "10.0.0.1",
 ]
+
+RELAY_PORT_COUNT = 4
+RELAY_FIRST_BASE = 18443
+
+
+def _stations_files():
+    env_path = os.environ.get("NOKIA_STATIONS_TSV")
+    if env_path:
+        yield Path(env_path)
+    yield Path(__file__).resolve().parents[2] / "deploy" / "relay" / "stations.tsv"
+
+
+def _relay_ports(path):
+    ports = set()
+    try:
+        lines = path.read_text().splitlines()
+    except OSError:
+        return ports
+    for line in lines:
+        if not line.strip() or line.startswith("#"):
+            continue
+        parts = line.split("\t")
+        if len(parts) < 2 or not parts[1].strip().isdigit():
+            continue
+        base = int(parts[1])
+        ports.update(range(base, base + RELAY_PORT_COUNT))
+    return ports
+
+
+def relay_endpoints():
+    for path in _stations_files():
+        ports = _relay_ports(path)
+        if ports:
+            return {f"relay:{port}" for port in sorted(ports)}
+    return {f"relay:{port}" for port in range(RELAY_FIRST_BASE, RELAY_FIRST_BASE + RELAY_PORT_COUNT)}
 
 
 def probe(ip, timeout=1.5):
@@ -46,7 +83,7 @@ def local_subnets():
 def discover(subnets=None, log=lambda m: None):
     """Probe well-known IPs first, then sweep local /24s. Returns ip or None."""
     subs = subnets if subnets is not None else local_subnets()
-    targets = set(CANDIDATE_IPS)
+    targets = set(CANDIDATE_IPS) | relay_endpoints()
     for s in subs:
         targets.update({f"{s}.1", f"{s}.254"})
 
