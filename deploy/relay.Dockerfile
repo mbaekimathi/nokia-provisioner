@@ -5,6 +5,7 @@ FROM alpine:3.20
 
 RUN apk add --no-cache openssh-server \
     && adduser -D -s /sbin/nologin tunnel \
+    && sed -i 's|^tunnel:!:|tunnel:*:|' /etc/shadow \
     && mkdir -p /run/sshd \
     && ssh-keygen -A
 
