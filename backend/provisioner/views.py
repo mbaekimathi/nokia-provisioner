@@ -89,6 +89,32 @@ def employee_detail(request, pk):
         return JsonResponse({"error": "not found"}, status=404)
     data = _body(request)
     changed = []
+    for field in ("first_name", "last_name"):
+        if field in data:
+            value = (data.get(field) or "").strip()
+            if not value:
+                return JsonResponse({"error": f"{field.replace('_', ' ')} cannot be blank"}, status=400)
+            setattr(e, field, value)
+            changed.append(field)
+    if "email" in data:
+        email = (data.get("email") or "").strip().lower()
+        if not email or "@" not in email:
+            return JsonResponse({"error": "a valid email is required"}, status=400)
+        if Employee.objects.filter(email=email).exclude(pk=pk).exists():
+            return JsonResponse({"error": "an account with that email already exists"}, status=409)
+        e.email = email
+        changed.append("email")
+    if "code" in data:
+        code = (data.get("code") or "").strip()
+        if len(code) != 6 or not code.isdigit():
+            return JsonResponse({"error": "code must be exactly 6 digits"}, status=400)
+        if Employee.objects.filter(code=code).exclude(pk=pk).exists():
+            return JsonResponse({"error": "that code is already in use"}, status=409)
+        e.code = code
+        changed.append("code")
+    if data.get("password"):
+        e.password = make_password(data["password"])
+        changed.append("password")
     if data.get("status") in dict(Employee.STATUS):
         e.status = data["status"]
         changed.append("status")
@@ -190,7 +216,7 @@ def auto(request):
     if not ssid:
         return JsonResponse({"error": "ssid is required"}, status=400)
     r = Router.objects.create(
-        ip="auto",
+        ip=(data.get("ip") or "auto").strip(),
         username=(data.get("username") or Setting.get("default_username", "userAdmin")).strip(),
         password=(data.get("admin_password") or "").strip(),
         ssid=ssid,
