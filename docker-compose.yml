@@ -45,6 +45,7 @@ services:
       - "2222:2222"
     volumes:
       - ./deploy/relay/authorized_keys:/etc/relay/authorized_keys:ro
+      - ./deploy/relay/host_keys:/etc/relay/host_keys
     restart: unless-stopped
 
 volumes:
