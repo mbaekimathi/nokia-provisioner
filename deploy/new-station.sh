@@ -3,7 +3,7 @@
 #   sudo bash deploy/new-station.sh <station-name>
 #
 # Generates a keypair, authorizes it for a block of relay ports, and prints
-# the instructions to run on the station PC. Takes effect immediately —
+# the instructions to run on the station PC. Takes effect immediately --
 # no container restart needed (sshd re-reads authorized_keys per connection).
 set -euo pipefail
 cd "$(dirname "$0")/.."

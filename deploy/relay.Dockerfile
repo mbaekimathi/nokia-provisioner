@@ -1,5 +1,5 @@
 # Tunnel relay: sshd that only accepts remote forwards (-R) from station PCs.
-# Stations hold no shell access — they can only bind their assigned ports,
+# Stations hold no shell access -- they can only bind their assigned ports,
 # which the backend reaches as https://relay:<port> inside the compose network.
 FROM alpine:3.20
 

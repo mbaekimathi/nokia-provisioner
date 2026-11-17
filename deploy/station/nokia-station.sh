@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# nokia-station.sh — keep the relay tunnel alive from a Linux/macOS station PC.
+# nokia-station.sh -- keep the relay tunnel alive from a Linux/macOS station PC.
 #
 #   bash nokia-station.sh -k mombasa.ed25519 -p 18443 -r 192.168.1.254
 #
@@ -36,6 +36,6 @@ while true; do
         -o ServerAliveInterval=30 -o ServerAliveCountMax=3 \
         -o ExitOnForwardFailure=yes -o StrictHostKeyChecking=accept-new \
         "${fwd[@]}" "tunnel@$SERVER"
-    echo "tunnel dropped — reconnecting in 5s"
+    echo "tunnel dropped -- reconnecting in 5s"
     sleep 5
 done

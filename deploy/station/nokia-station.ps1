@@ -1,4 +1,4 @@
-# nokia-station.ps1 — keep the relay tunnel alive from a Windows station PC.
+# nokia-station.ps1 -- keep the relay tunnel alive from a Windows station PC.
 # Requires only the built-in Windows OpenSSH client (ssh.exe).
 #
 #   .\nokia-station.ps1 -Key .\mombasa.ed25519 -Port 18443 -Router 192.168.1.254
@@ -29,6 +29,6 @@ while ($true) {
         -o ServerAliveInterval=30 -o ServerAliveCountMax=3 `
         -o ExitOnForwardFailure=yes -o StrictHostKeyChecking=accept-new `
         @fwd "tunnel@$Server"
-    Write-Host "tunnel dropped — reconnecting in 5s"
+    Write-Host "tunnel dropped -- reconnecting in 5s"
     Start-Sleep 5
 }

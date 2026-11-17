@@ -4,7 +4,7 @@
 #   sudo certbot --nginx -d nokia.richcom.co.ke
 #
 # Proxies public traffic to the frontend container on 127.0.0.1:8080.
-# Keep APP_BIND=127.0.0.1 in .env — the container stays localhost-only.
+# Keep APP_BIND=127.0.0.1 in .env -- the container stays localhost-only.
 
 server {
     listen 80;
