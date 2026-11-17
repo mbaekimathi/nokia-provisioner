@@ -1,0 +1,22 @@
+Port 2222
+ListenAddress 0.0.0.0
+Protocol 2
+
+# Key-only auth for the tunnel user.
+PermitRootLogin no
+PasswordAuthentication no
+PubkeyAuthentication yes
+AllowUsers tunnel
+
+# Remote forwards bind all interfaces INSIDE this container, so the backend
+# can reach them as relay:<port>. Stations never get a shell or local forward.
+GatewayPorts yes
+AllowTcpForwarding remote
+AllowAgentForwarding no
+X11Forwarding no
+PermitTTY no
+PermitTunnel no
+
+AuthorizedKeysFile /etc/relay/authorized_keys
+ClientAliveInterval 30
+ClientAliveCountMax 3

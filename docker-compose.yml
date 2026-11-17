@@ -33,5 +33,19 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  # SSH tunnel relay: station PCs at remote sites reverse-forward their
+  # locally attached Nokia routers here. Backend reaches them as
+  # https://relay:<port> (see deploy/relay/stations.tsv for assignments).
+  relay:
+    build:
+      context: .
+      dockerfile: deploy/relay.Dockerfile
+    image: nokia-provisioner-relay:local
+    ports:
+      - "2222:2222"
+    volumes:
+      - ./deploy/relay/authorized_keys:/etc/relay/authorized_keys:ro
+    restart: unless-stopped
+
 volumes:
   db_data:

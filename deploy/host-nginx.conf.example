@@ -1,0 +1,21 @@
+# Install on the VPS host as /etc/nginx/sites-available/nokia, then:
+#   sudo ln -s /etc/nginx/sites-available/nokia /etc/nginx/sites-enabled/nokia
+#   sudo nginx -t && sudo systemctl reload nginx
+#   sudo certbot --nginx -d nokia.richcom.co.ke
+#
+# Proxies public traffic to the frontend container on 127.0.0.1:8080.
+# Keep APP_BIND=127.0.0.1 in .env — the container stays localhost-only.
+
+server {
+    listen 80;
+    server_name nokia.richcom.co.ke;
+
+    location / {
+        proxy_pass http://127.0.0.1:8080;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}

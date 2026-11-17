@@ -13,6 +13,9 @@ __pycache__/
 frontend/node_modules/
 frontend/dist/
 
+# Station private keys live only on the VPS / station PCs
+deploy/relay/keys/
+
 # Logs and OS files
 *.log
 .DS_Store
